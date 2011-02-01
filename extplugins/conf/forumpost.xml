@@ -1,0 +1,42 @@
+<configuration plugin="forumpost">
+   <settings name="commands">
+      <set name="permban">2</set>
+   </settings>
+    <settings name="settings">
+      <!-- enable posting to a site -->
+      <set name="enabled">true</set>
+      <!-- the level required to not add a reason -->
+      <set name="noreason_level">100</set>
+      <!-- username for the forum -->
+      <set name="userName">user</set>
+      <!-- password for the above user -->
+      <set name="password">password</set>
+      <!-- login username form label -->
+      <set name="loginFormUserName">user</set>
+      <!-- login password form label -->
+      <set name="loginFormPassword">password</set>
+      <!-- login username form label -->
+      <set name="messageFormSubject">subject</set>
+      <!-- login password form label -->
+      <set name="messageFormBody">body</set>
+      <!-- base url to login from -->
+      <set name="loginURL">loginURL</set>
+      <!-- base url to post from -->
+      <set name="postURL">postURL</set>
+      <!-- form index for logging in -->
+      <set name="loginIndex">1</set>
+      <!-- form index for posting -->
+      <set name="postIndex">1</set>
+      <set name="subjectFormat">${bannedName}-${serverName}-${reason}-${bannedIP}</set>
+      <set name="messageFormat">Player Name: ${bannedName}
+IP: ${bannedIP}
+Server: ${serverName}
+Date: ${time}
+Reason: ${reason}
+Banned B3-ID: ${bannedB3id}
+Banner B3-ID: ${bannerB3id}
+Banned by: ${bannerName}
+Map: ${mapName}
+Duration: ${duration}</set>
+    </settings>    
+</configuration>
