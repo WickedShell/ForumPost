@@ -1,11 +1,14 @@
 # fourmPostPlugin.py
-# By spaz (a.k.a. WickedShell)
+# By WickedShell
 # 
-# This is a B3 plugin designed for WildCat's Clan (wildcatsclan.net)
+# This is a B3 plugin
 # The idea of this plugin is when a permanant ban is issued, the plugin will
-# automatically publish the releavent information on the forms
-# While this plugin may be generalized for other sites, at the moment
-# it works specifically with WC and not other sites.
+# automatically publish the releavent information on the forums
+# The plugin uses html requests and is compatabile with most sites, and uses
+# html forms for all actions. The setup is rigid however, and a tool will be
+# written to asssist in the initial deployment.
+#
+# Most ban mechanism aspects were taken from admin plugin released in B3 1.4.1
 
 __version__ = '0.0.2'
 __author__  = 'WickedShell'
@@ -72,8 +75,8 @@ class ForumpostPlugin(b3.plugin.Plugin):
             return False
 
         # Register commands
-        self._adminPlugin.registerCommand(self, 'permban', 1, self.cmd_permban, 'permban')
-        self._adminPlugin.registerCommand(self, 'pb', 1, self.cmd_permban, 'permban')
+        self._adminPlugin.registerCommand(self, 'permban', 60, self.cmd_permban, 'permban')
+        self._adminPlugin.registerCommand(self, 'pb', 60, self.cmd_permban, 'permban')
 
         # Register our events
         #self.verbose('Registering events')
