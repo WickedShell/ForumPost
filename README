@@ -1,0 +1,5 @@
+THIS IS CURRENTLY UNSUPPORTED
+
+This is a bit unstable, but mostly is so specific to a certain forum and it's setup, it proves to be useless most other places. It is in need of refactoring to intelligently use the XML config file, as well as to be more robust, and user firendly. (Setup support tools).
+
+Sorry, this is really not ready for public release or useage yet.
