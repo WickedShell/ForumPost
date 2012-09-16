@@ -8,9 +8,11 @@
 # html forms for all actions. The setup is rigid however, and a tool will be
 # written to asssist in the initial deployment.
 #
-# Most ban mechanism aspects were taken from admin plugin released in B3 1.4.1
+# Changelog:
+# 0.1.0 09/16/2012 use events to make the ban, strip colors out of the name
+#                  attempt to relogin and repost if a post fails, catch failures
 
-__version__ = '0.0.2'
+__version__ = '0.1.0'
 __author__  = 'WickedShell'
 
 from time import strftime
@@ -40,27 +42,29 @@ class ForumpostPlugin(b3.plugin.Plugin):
     #logs into the site for posting
     #this assumes login was succesful
     def login(self):
-        #should need this once (with cookies that are always logged in)
-        #load the main page to log in from
-        mainRequest = mechanize.Request(self.loginURL)
-        mainResponse = mechanize.urlopen(mainRequest)
-        #generate a list of avalible HTML forms so we can select the desired one
-        forms = mechanize.ParseResponse(mainResponse, backwards_compat=False)
-        form = forms[self.loginIndex]
-        #    print form  # very useful! debug
-        #fill in username and password fields and login
-        #TODO: move form fields into the config
-        #TODO: add dynamic field support
-        form[self.loginFormUserName] = self.userName
-        form[self.loginFormPassword] = self.password
-        loginRequest = form.click()  # mechanize.Request object
-        loginResponse = mechanize.urlopen(loginRequest)
-        #    print loginResponse.geturl() #debug
-        #    print loginResponse.info()   #debug
-        #free the rescources on the response page
-        mainResponse.close()
-        loginResponse.close()
-        #TODO: a validation of successful login
+        try:
+            #load the main page to log in from
+            mainRequest = mechanize.Request(self.loginURL)
+            mainResponse = mechanize.urlopen(mainRequest)
+            #generate a list of avalible HTML forms so we can select the desired one
+            forms = mechanize.ParseResponse(mainResponse, backwards_compat=False)
+            form = forms[self.loginIndex]
+            #    print form  # very useful! debug
+            #fill in username and password fields and login
+            #TODO: move form fields into the config
+            #TODO: add dynamic field support
+            form[self.loginFormUserName] = self.userName
+            form[self.loginFormPassword] = self.password
+            loginRequest = form.click()  # mechanize.Request object
+            loginResponse = mechanize.urlopen(loginRequest)
+            #    print loginResponse.geturl() #debug
+            #    print loginResponse.info()   #debug
+            #free the rescources on the response page
+            mainResponse.close()
+            loginResponse.close()
+            #TODO: a validation of successful login
+        except:
+            self.verbose('Failed to login');
 
     def startup(self):
         """\
@@ -75,8 +79,7 @@ class ForumpostPlugin(b3.plugin.Plugin):
             return False
 
         # Register commands
-        self._adminPlugin.registerCommand(self, 'permban', 60, self.cmd_permban, 'permban')
-        self._adminPlugin.registerCommand(self, 'pb', 60, self.cmd_permban, 'permban')
+        self.registerEvent(b3.events.EVT_CLIENT_BAN)
 
         # Register our events
         #self.verbose('Registering events')
@@ -88,17 +91,21 @@ class ForumpostPlugin(b3.plugin.Plugin):
 
     #TODO: dynamic post fields
     def post(self, url, formIndex, subject, message):
-        postPageRequest = mechanize.Request(url)
-        postPageResponse = mechanize.urlopen(postPageRequest)
-        forms = mechanize.ParseResponse(postPageResponse, backwards_compat=False)
-        messageForm = forms[int(formIndex)]
-        messageForm[self.messageFormSubject] = subject
-        messageForm[self.messageFormBody] = message
-        submitRequest = messageForm.click()
-        submitResponse = mechanize.urlopen(submitRequest)
-        #clean up the response's
-        postPageResponse.close()
-        submitResponse.close()
+        try:
+            postPageRequest = mechanize.Request(url)
+            postPageResponse = mechanize.urlopen(postPageRequest)
+            forms = mechanize.ParseResponse(postPageResponse, backwards_compat=False)
+            messageForm = forms[int(formIndex)]
+            messageForm[self.messageFormSubject] = subject
+            messageForm[self.messageFormBody] = message
+            submitRequest = messageForm.click()
+            submitResponse = mechanize.urlopen(submitRequest)
+            #clean up the response's
+            postPageResponse.close()
+            submitResponse.close()
+            return True
+        except:
+            return False
 
     def onLoadConfig(self):
         # load our settings
@@ -121,84 +128,60 @@ class ForumpostPlugin(b3.plugin.Plugin):
         self.messageFormSubject = str(self.config.get('settings', 'messageFormSubject'))
         self.messageFormBody = str(self.config.get('settings', 'messageFormBody'))
 
+    def post_ban(self, event):
+        banned = event.client
+        banner = event.data['admin']
+        if self.postToForums:
+            self.verbose("Posting to the forums!")
+            #set up the future contents of the substitution dictonary
+            bannedName  = banned.exactName[0:len(banned.exactName) - 2]
+            bannedIP    = banned.ip
+            bannedB3id  = str(banned.id)
+            bannedLevel = banned.maxLevel
+            bannerName  = banner.exactName[0:len(banner.exactName) - 2]
+            bannerIP    = banner.ip
+            bannerB3id  = str(banner.id)
+            bannerLevel = banner.maxLevel
+            serverName  = str(self.console.getCvar('sv_hostname'))
+            serverName  = serverName[35:len(serverName) - 21]
+            reason      = event.data['reason']
+            duration    = "permanent"
+            time        = strftime("%m-%d-%Y-%H:%M")
+            mapName     = str(self.console.getCvar('mapname'))
+            mapName     = mapName[29:len(mapName)].rsplit('\"')[0]
+
+
+            #build a substition dictionary that the message will draw on
+            substDict = dict(bannedName = bannedName,
+                bannedIP = bannedIP, bannedB3id = bannedB3id,
+                bannedLevel = bannedLevel, bannerName = bannerName,
+                bannerLevel = bannerLevel, bannerIP = bannerIP,
+                bannerB3id = bannerB3id, serverName = serverName,
+                reason = reason, time = time, mapName = mapName,
+                duration = duration)
+                    
+            subject = self.subjectTemplate.safe_substitute(substDict)
+            message = self.messageTemplate.safe_substitute(substDict)
+            # strip all color's from names/etc (ie ^1)
+            subject = re.sub('\^\d', '', subject)
+            message = re.sub('\^\d', '', message)
+            self.verbose(subject)
+            self.verbose(message)
+            success = self.post(self.postURL, self.postIndex, subject, message)
+            if success:
+                banner.message('^2Created a post on the forums')
+            else:
+                banner.message('^1Failed to create a post on the forums, attempting to relogin and post')
+                self.login()
+                success = self.post(self.postURL, self.postIndex, subject, message)
+                if success:
+                    banner.message('^2Succesfully relogged in and posted')
+                else:
+                    banner.message('^1Failed to relogin and post, please make a mnaul post')
+
     def onEvent(self, event):
         """\
         Handle intercepted events
         """
-        #don't believe we handle anything yet. This could be false
-
-
-    def cmd_permban(self, data, client=None, cmd=None):
-        """\
-        <name> [<reason>] - ban a player permanently
-        """
-        m = self._adminPlugin.parseUserCmd(data)
-        if not m:
-            client.message('^7Invalid parameters')
-            return False
-
-        cid, keyword = m
-        reason = self._adminPlugin.getReason(keyword)
-
-        #TODO: the no reason level should be loaded from config
-        if not reason and client.maxLevel < self.config.getint('settings', 'noreason_level'):
-            client.message('^1ERROR: ^7You must supply a reason')
-            return False
-
-        sclient = self._adminPlugin.findClientPrompt(cid, client)
-        if sclient:
-            if sclient.cid == client.cid:
-                self.console.say(self._adminPlugin.getMessage('ban_self', client.exactName))
-                return True
-            elif sclient.maxLevel >= client.maxLevel:
-                if sclient.maskGroup:
-                    client.message('^7%s ^7is a masked higher level player, can\'t ban' % client.exactName)
-                else:
-                    self._adminPlugin.console.say(self.getMessage('ban_denied', client.exactName, sclient.exactName))
-                return True
-            else:
-                sclient.groupBits = 0
-                sclient.save()
-
-                sclient.ban(reason, keyword, client)
-                if self.postToForums:
-                    self.verbose("Posting to the forums!")
-                    #set up the future contents of the substitution dictonary
-                    bannedName  = sclient.exactName[0:len(sclient.exactName) - 2]
-                    bannedIP    = sclient.ip
-                    bannedB3id  = str(sclient.id)
-                    bannedLevel = sclient.maxLevel
-                    bannerName  = client.exactName[0:len(client.exactName) - 2]
-                    bannerIP    = client.ip
-                    bannerB3id  = str(client.id)
-                    bannerLevel = client.maxLevel
-                    serverName  = str(self.console.getCvar('sv_hostname'))
-                    serverName  = serverName[33:len(serverName) - 20]
-                    reason
-                    keyword
-                    duration    = "permanent"
-                    time        = strftime("%m-%d-%Y-%H:%M")
-                    mapName     = str(self.console.getCvar('mapname'))
-                    mapName     = mapName[29:len(mapName)].rsplit('\"')[0]
-
-
-                    #build a substition dictionary that the message will draw on
-                    substDict = dict(bannedName = bannedName,
-                        bannedIP = bannedIP, bannedB3id = bannedB3id,
-                        bannedLevel = bannedLevel, bannerName = bannerName,
-                        bannerLevel = bannerLevel, bannerIP = bannerIP,
-                        bannerB3id = bannerB3id, serverName = serverName,
-                        reason = reason, time = time, mapName = mapName,
-                        duration = duration)
-                    
-                    subject = self.subjectTemplate.safe_substitute(substDict)
-                    message = self.messageTemplate.safe_substitute(substDict)
-                    self.verbose(subject)
-                    self.verbose(message)
-                    self.post(self.postURL, self.postIndex, subject, message)
-                    client.message('^1Created a post on the forums of this ban')
-                return True
-        elif re.match('^[0-9]+$', cid):
-            # failsafe, do a manual client id ban
-            self._adminPlugin.console.ban(cid, reason, client)
-
+        if event.type == b3.events.EVT_CLIENT_BAN:
+            self.post_ban(event);
