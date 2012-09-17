@@ -11,8 +11,9 @@
 # Changelog:
 # 0.1.0 09/16/2012 use events to make the ban, strip colors out of the name
 #                  attempt to relogin and repost if a post fails, catch failures
+# 0.1.1 09/16/2012 don't post if it was a self ban, or a b3 ban
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __author__  = 'WickedShell'
 
 from time import strftime
@@ -132,6 +133,12 @@ class ForumpostPlugin(b3.plugin.Plugin):
         banned = event.client
         banner = event.data['admin']
         if self.postToForums:
+            if banner == None:
+                self.verbose("Ignoring a ban without a benner")
+                return
+            if banner == banned:
+                self.verbose("Ignoring a self ban")
+                return
             self.verbose("Posting to the forums!")
             #set up the future contents of the substitution dictonary
             bannedName  = banned.exactName[0:len(banned.exactName) - 2]
