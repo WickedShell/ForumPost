@@ -130,11 +130,15 @@ class ForumpostPlugin(b3.plugin.Plugin):
         self.messageFormBody = str(self.config.get('settings', 'messageFormBody'))
 
     def post_ban(self, event):
-        banned = event.client
-        banner = event.data['admin']
+        try:
+            banned = event.client
+            banner = event.data['admin']
+        except:
+            banner = None
+            banned = None
         if self.postToForums:
             if banner == None:
-                self.verbose("Ignoring a ban without a benner")
+                self.verbose("Ignoring a ban without a banner")
                 return
             if banner == banned:
                 self.verbose("Ignoring a self ban")
